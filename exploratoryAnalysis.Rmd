@@ -1,0 +1,125 @@
+Gender Bias
+========================================================
+Notes
+-----
+use gc() - garbage Collection -  to free up memory
+
+Prepare Data
+------------
+
+### Load Raw Data 
+
+Read in the data:
+```{r}
+file.location <- "../Data Sets/san diego research file/"
+
+scores.file.name <- "ca2012_all_37_csv_v3.txt"
+entities.file.name <- "ca2012entities_csv.txt"
+subgroups.file.name <- "Subgroups.txt"
+tests.file.name <- "Tests.txt"
+
+scores <- read.csv(paste0(file.location, scores.file.name), header=TRUE)
+entities <- read.csv(paste0(file.location, entities.file.name), header=TRUE)
+subgroups <- read.csv(paste0(file.location, subgroups.file.name), header=TRUE)
+tests <- read.csv(paste0(file.location, tests.file.name), header=TRUE)
+
+```
+
+### Clean Data
+
+Look at district information:
+
+```{r eval=FALSE}
+d.code <- as.factor(scores$District.Code)
+plot(d.code)
+
+# What district is that big spike?
+levels(d.code)[match(max(table(d.code)), table(d.code))]
+               
+# District 68338 -- San Diego Unified (not surprising)
+# I live in Poway Unified, how many records there? Poway Unified == 68296
+sum(scores$District.Code == 68296)
+
+# 34113. How many combined?
+
+sum(scores$District.Code == 68296 | scores$District.Code == 68338)
+# 212488 seems like a good place to start.
+```
+
+
+Seem to have figured out my merge issues so this is no longer necessary.
+```{r eval=FALSE}
+# Filter scores to District Codes 68296 or 68338
+scores <- scores[scores$District.Code == 68296 | scores$District.Code == 68338,]
+```
+
+
+**Add School Names**
+Something going on here: there are 747 unique school codes and 775 entries in the school table.
+```{r}
+# Only need entities from San Diego County
+entities <- entities[entities$County.Name == "San Diego",]
+schools <- unique(entities[,c("School.Code", "School.Name", "Zip.Code")])
+
+scores <- merge(x = scores, y = schools, by="School.Code", all.x=TRUE)
+
+# Now that schools names are in remove School.Code
+# scores <- scores[,-scores$School.Code]
+
+```
+
+**Add District Names:**  
+
+There is something I don't quite understand where the charter schools have a district code for a more general district but the district name is unique:  
+District.Code -- District.Name  
+10371         -- San Diego County Office of Education  
+10371         -- Literacy First Charter  
+  
+There seem to be 45 unique district codes. If I filter out records with charter numbers, I get a list of 45 codes and 45 District Names. Let's use this for now.  
+
+```{r}
+districts <- unique(entities[entities$Charter.Number == 0, c("District.Code", "District.Name")])
+length(unique(districts$District.Code))
+length(unique(districts$District.Name))
+
+scores <- merge(x = scores, y = districts, by="District.Code", all.x=TRUE)
+
+```
+
+**Subgroup.ID**
+
+```{r}
+subgroups <- subgroups[,-1]
+names(subgroups)[1] <- "Subgroup.ID"
+
+scores <- merge(x = scores, y = subgroups, by="Subgroup.ID", all.x=TRUE)
+```
+
+
+**Test.ID**  
+
+```{r}
+tests <- tests[,names(tests) != "Test.ID.Num"]
+names(tests)[1] <- "Test.Id"
+
+scores <- merge(x = scores, y = tests, by="Test.Id", all.x=TRUE)
+```
+
+
+
+Other Clean up:
+```{r eval=FALSE}
+#All SD county so we can drop county code
+scores <- scores[,-scores$County.Code]
+
+```
+
+
+
+```{r}
+plot(as.numeric(scores$Percentage.Advanced) ~ scores$Subgroup.ID)  # Try with SmoothScatter
+
+```
+
+
+
