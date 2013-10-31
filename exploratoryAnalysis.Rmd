@@ -54,17 +54,24 @@ scores <- scores[scores$District.Code == 68296 | scores$District.Code == 68338,]
 ```
 
 
+```{r}
+#Percentage.Advanced coming in as a factor, change this to numeric
+scores$Percentage.Advanced <- as.numeric(scores$Percentage.Advanced)
+```
+
+
+### Merge Data
+
+Attempting to add columns to scores data set. Starting with 663295 obs. Should be the same when I'm done.
+
 **Add School Names**
-Something going on here: there are 747 unique school codes and 775 entries in the school table.
 ```{r}
 # Only need entities from San Diego County
 entities <- entities[entities$County.Name == "San Diego",]
-schools <- unique(entities[,c("School.Code", "School.Name", "Zip.Code")])
+schools <- unique(entities[,c("School.Code", "School.Name")])
 
 scores <- merge(x = scores, y = schools, by="School.Code", all.x=TRUE)
 
-# Now that schools names are in remove School.Code
-# scores <- scores[,-scores$School.Code]
 
 ```
 
@@ -114,12 +121,41 @@ scores <- scores[,-scores$County.Code]
 
 ```
 
+Explore Data
+------------
+
+Start by just trying to get a feel for what's there
+
+### Percentage Advanced by subgroup type
 
 
-```{r}
-plot(as.numeric(scores$Percentage.Advanced) ~ scores$Subgroup.ID)  # Try with SmoothScatter
+```{r fig.width=10, fig.height=12}
+# par(mar=c(5,4,4,2)) : default values
+par(mar=c(5,20,4,2))
+tbl <- aggregate(Percentage.Advanced ~ Subgroup.ID, data=scores, mean, na.action=na.omit)
+
+tbl <- merge(x = tbl, y = subgroups, by="Subgroup.ID", all.x=TRUE)
+
+tbl <- tbl[with(tbl, order(All.Students.1, Percentage.Advanced)), ]
+
+get.color <- function(item) {which(levels(tbl$All.Students.1) == item)}
+color.id <- lapply(tbl$All.Students.1, get.color)
+
+barplot(tbl$Percentage.Advanced, names.arg=tbl$All.Students, horiz=TRUE, las=2, cex.names=0.65, 
+        col=as.numeric(color.id))
 
 ```
+
+I think this may be combining a bunch of types together. In the subgroups table, I have all.students and all.students.1. The latter seems to group for former. I need to be able to distinguish between the groups
+
+```{r}
+
+```
+
+
+
+
+
 
 
 
