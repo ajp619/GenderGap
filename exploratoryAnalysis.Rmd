@@ -4,6 +4,12 @@ Notes
 -----
 use gc() - garbage Collection -  to free up memory
 
+Introduction
+------------
+
+My daughters attend Creekside Elementary (School.Code = 6117469), so that may show up periodically.
+
+
 Prepare Data
 ------------
 
@@ -18,144 +24,252 @@ entities.file.name <- "ca2012entities_csv.txt"
 subgroups.file.name <- "Subgroups.txt"
 tests.file.name <- "Tests.txt"
 
-scores <- read.csv(paste0(file.location, scores.file.name), header=TRUE)
-entities <- read.csv(paste0(file.location, entities.file.name), header=TRUE)
-subgroups <- read.csv(paste0(file.location, subgroups.file.name), header=TRUE)
-tests <- read.csv(paste0(file.location, tests.file.name), header=TRUE)
+scores <- read.csv(paste0(file.location, scores.file.name), header=TRUE, sep=",", strip.white=TRUE)
+entities <- read.csv(paste0(file.location, entities.file.name), header=TRUE, sep=",", strip.white=TRUE)
+subgroups <- read.csv(paste0(file.location, subgroups.file.name), header=TRUE, sep=",", strip.white=TRUE)
+tests <- read.csv(paste0(file.location, tests.file.name), header=TRUE, sep=",", strip.white=TRUE)
 
 ```
 
 ### Clean Data
 
-Look at district information:
-
-```{r eval=FALSE}
-d.code <- as.factor(scores$District.Code)
-plot(d.code)
-
-# What district is that big spike?
-levels(d.code)[match(max(table(d.code)), table(d.code))]
-               
-# District 68338 -- San Diego Unified (not surprising)
-# I live in Poway Unified, how many records there? Poway Unified == 68296
-sum(scores$District.Code == 68296)
-
-# 34113. How many combined?
-
-sum(scores$District.Code == 68296 | scores$District.Code == 68338)
-# 212488 seems like a good place to start.
-```
-
-
-Seem to have figured out my merge issues so this is no longer necessary.
-```{r eval=FALSE}
-# Filter scores to District Codes 68296 or 68338
-scores <- scores[scores$District.Code == 68296 | scores$District.Code == 68338,]
-```
-
 
 ```{r}
+# School Codes of 0 or 1 are not normal schools and I want to filter them out:
+scores <- scores[scores$School.Code != 0 & scores$School.Code != 1, ]
+entities <- entities[entities$School.Code != 0 & entities$School.Code != 1, ]
+
+# Mean.Scale.Score comes in as factor, should be numeric
+scores$Mean.Scale.Score <- as.numeric(as.character(scores$Mean.Scale.Score))
+
 #Percentage.Advanced coming in as a factor, change this to numeric
 scores$Percentage.Advanced <- as.numeric(scores$Percentage.Advanced)
+
+# Only need entities from San Diego County
+entities <- entities[entities$County.Name == "San Diego",]
+
+# Remove duplicate columns from subgroups and rename 1st column to Subgroup.ID
+subgroups <- subgroups[ , -1]
+names(subgroups)[1] <- "Subgroup.ID"
+
+# There is no information in the subgroups file on Subgroup.ID == 1. Remove this from scores
+# scores.sg1 <- scores[scores$Subgroup.ID == 1, ] # This contains all the differentiation in Percentage.Advanced
+scores <- scores[scores$Subgroup.ID != 1, ]
+
+# Remove duplicate columns from tests
+tests <- tests[,names(tests) != "Test.ID.Num"]
+# names(tests)[1] <- "Test.ID"
+
+# Rename scores$Test.Id to scores$Test.ID for consistency
+names(scores)[names(scores) == "Test.Id"] <- "Test.ID"
+
+# Limit focus to CST Mathematics - this test covers grades 2 - 7
+scores <- scores[scores$Test.ID == 8, ]
+
+# Limit focus to the male and female subgroups
+scores <- scores[scores$Subgroup.ID == 3 | scores$Subgroup.ID == 4, ]
+
+# Remove NA scores
+scores <- scores[!is.na(scores$Mean.Scale.Score), ]
+
 ```
 
 
 ### Merge Data
 
-Attempting to add columns to scores data set. Starting with 663295 obs. Should be the same when I'm done.
-
-**Add School Names**
+Attempting to add columns to scores data set. Starting with 4191 obs. Should be the same when I'm done.
 ```{r}
-# Only need entities from San Diego County
-entities <- entities[entities$County.Name == "San Diego",]
-schools <- unique(entities[,c("School.Code", "School.Name")])
+# Merge entities - exclude redundant information
+scores <- merge(x = scores, y = entities[,(names(entities) != "County.Code" & 
+                                          names(entities) != "District.Code" & 
+                                          names(entities) != "Charter.Number" & 
+                                          names(entities) != "Test.Year")], by = "School.Code", all.x = TRUE)
 
-scores <- merge(x = scores, y = schools, by="School.Code", all.x=TRUE)
-
-
-```
-
-**Add District Names:**  
-
-There is something I don't quite understand where the charter schools have a district code for a more general district but the district name is unique:  
-District.Code -- District.Name  
-10371         -- San Diego County Office of Education  
-10371         -- Literacy First Charter  
-  
-There seem to be 45 unique district codes. If I filter out records with charter numbers, I get a list of 45 codes and 45 District Names. Let's use this for now.  
-
-```{r}
-districts <- unique(entities[entities$Charter.Number == 0, c("District.Code", "District.Name")])
-length(unique(districts$District.Code))
-length(unique(districts$District.Name))
-
-scores <- merge(x = scores, y = districts, by="District.Code", all.x=TRUE)
-
-```
-
-**Subgroup.ID**
-
-```{r}
-subgroups <- subgroups[,-1]
-names(subgroups)[1] <- "Subgroup.ID"
-
+# Merge Subgroups
 scores <- merge(x = scores, y = subgroups, by="Subgroup.ID", all.x=TRUE)
+
+# Merge Tests
+scores <- merge(x = scores, y = tests, by="Test.ID", all.x=TRUE)
 ```
 
-
-**Test.ID**  
-
-```{r}
-tests <- tests[,names(tests) != "Test.ID.Num"]
-names(tests)[1] <- "Test.Id"
-
-scores <- merge(x = scores, y = tests, by="Test.Id", all.x=TRUE)
-```
-
-
-
-Other Clean up:
-```{r eval=FALSE}
-#All SD county so we can drop county code
-scores <- scores[,-scores$County.Code]
-
-```
 
 Explore Data
 ------------
 
 Start by just trying to get a feel for what's there
 
-### Percentage Advanced by subgroup type
+### Creekside delta on CST Mathematics test by grade by gender
 
+* What about the same thing but focused on Creekside.
+* Narrow the focus to one test ("CST Mathematics"). Try to correlate with reports from the web tool.
 
-```{r fig.width=10, fig.height=12}
+issues: 
+* Where are the NAs coming from? I don't think they should be there  
+
+```{r fig.width=10, fig.height=8}
 # par(mar=c(5,4,4,2)) : default values
-par(mar=c(5,20,4,2))
-tbl <- aggregate(Percentage.Advanced ~ Subgroup.ID, data=scores, mean, na.action=na.omit)
+par(mar=c(5,5,4,2))
 
-tbl <- merge(x = tbl, y = subgroups, by="Subgroup.ID", all.x=TRUE)
+# Filter scores to just Creekside and just the test "CST Mathematics"
 
-tbl <- tbl[with(tbl, order(All.Students.1, Percentage.Advanced)), ]
+creekside.scores <- scores[scores$School.Name == "Creekside Elementary" & 
+                             scores$Test.Name == "CST Mathematics" & 
+                             scores$All.Students.1 == "Gender", ]
+creekside.scores <- creekside.scores[!is.na(creekside.scores$Test.Name),]
+creekside.scores <- creekside.scores[order(creekside.scores$Grade, creekside.scores$All.Students),]
 
-get.color <- function(item) {which(levels(tbl$All.Students.1) == item)}
-color.id <- lapply(tbl$All.Students.1, get.color)
+# tbl <- aggregate(Mean.Scale.Score ~ c(Subgroup.ID, Grade), data=creekside.scores, mean, 
+#                  na.action=na.omit)
+# 
+# tbl <- merge(x = tbl, y = subgroups, by="Subgroup.ID", all.x=TRUE)
 
-barplot(tbl$Percentage.Advanced, names.arg=tbl$All.Students, horiz=TRUE, las=2, cex.names=0.65, 
-        col=as.numeric(color.id))
-
+barplot(creekside.scores$Mean.Scale.Score, names.arg=c("2nd F", "2nd M", 
+                                                       "3rd F", "3rd M", 
+                                                       "4th F", "4th M", 
+                                                       "5th F", "5th M"))
 ```
 
-I think this may be combining a bunch of types together. In the subgroups table, I have all.students and all.students.1. The latter seems to group for former. I need to be able to distinguish between the groups
+That's interesting, and seems to show a gender gap in 3rd, 4th, and 5th grades. This is unexpected since Creekside is the top elementary school in the district and in my opinion has most of the attributes you would expect to see in a progressive school: fairly affluent, college educated parents, etc
+
+```
+Let's try this same metric but summarize across all schools:
+```
+
+### CST Mathematics test by gender by grade
+
+```{r fig.width=10, fig.height=8}
+library(plyr)
+# par(mar=c(5,4,4,2)) : default values
+par(mar=c(5,4,4,2))
+
+# Filter scores to just the test "CST Mathematics"
+
+cstM.scores <- scores[scores$Test.Name == "CST Mathematics" & 
+                      scores$All.Students.1 == "Gender", ]
+cstM.scores <- cstM.scores[!is.na(cstM.scores$Test.Name), ]
+cstM.scores <- cstM.scores[!is.na(cstM.scores$Mean.Scale.Score), ]  # Again, why are there NAs.
+                                                                    # Can I just get rid of them?
+cstM.scores <- cstM.scores[order(cstM.scores$Grade, cstM.scores$All.Students), ]
+
+tbl <- ddply(cstM.scores, .(All.Students,Grade), function(x) mean(x$Mean.Scale.Score) )
+tbl <- tbl[order(tbl$Grade, tbl$All.Students), ]
+
+barplot(tbl$V1)
+```
+
+Interesting. Technically, the difference is still there, but I wonder if it's statistically significant.
+
+```
+Next let's see if I can break this down by zip code
+```
+
+```{r eval=FALSE}
+library(plyr)
+# par(mar=c(5,4,4,2)) : default values
+par(mar=c(5,4,4,2))
+
+# Filter scores to just the test "CST Mathematics"
+
+cstM.scores <- scores[scores$Test.Name == "CST Mathematics" & 
+                      scores$All.Students.1 == "Gender", ]
+cstM.scores <- cstM.scores[!is.na(cstM.scores$Test.Name), ]
+cstM.scores <- cstM.scores[!is.na(cstM.scores$Mean.Scale.Score), ]  # Again, why are there NAs.
+                                                                    # Can I just get rid of them?
+cstM.scores <- cstM.scores[order(cstM.scores$Grade, cstM.scores$All.Students), ]
+
+tbl <- ddply(cstM.scores, .(All.Students,Grade, Zip.Code), function(x) mean(x$Mean.Scale.Score) )
+tbl <- tbl[order(tbl$Grade, tbl$All.Students), ]
+
+barplot(tbl$V1, names.arg=c("2nd F", "2nd M", 
+                                          "3rd F", "3rd M", 
+                                          "4th F", "4th M", 
+                                          "5th F", "5th M",
+                                          "6th F", "6th M",
+                                          "7th F", "7th M"))
+```
+
+
+** Not working yet **
+```{r eval=FALSE}
+# for each zip code
+  # for each school code
+    # for each grade (2-7)
+
+#num = 0
+
+scores.female <- data.frame(zip.code=as.integer(), 
+                            school.code=as.integer(), 
+                            grade=as.integer(),
+                            school.name=as.character(), 
+                            score=as.numeric(), 
+                            stringsAsFactors=FALSE)
+scores.male <- data.frame(zip.code=as.integer(), 
+                          school.code=as.integer(), 
+                          grade=as.integer(),
+                          school.name=as.character(), 
+                          score=as.numeric(),
+                          stringsAsFactors=FALSE)
+
+for(zip in unique(scores$Zip.Code)){
+  for(code in unique(scores$School.Code[scores$Zip.Code == zip])){
+    for(grade in 2:7){
+      filter <- (scores$Zip.Code == zip & scores$School.Code == code & scores$Grade == grade)
+      if(sum(filter) == 2){
+        newrow.f <- list(zip, 
+                         code, 
+                         grade, 
+                         as.character(scores$School.Name[filter & scores$All.Students == "Females"]),
+                         scores$Mean.Scale.Score[filter & scores$All.Students == "Females"])
+        newrow.m <- list(zip, 
+                         code, 
+                         grade, 
+                         as.character(scores$School.Name[filter & scores$All.Students == "Males"]),
+                         scores$Mean.Scale.Score[filter & scores$All.Students == "Males"])
+        # Append values to scores.female
+        scores.female[dim(scores.female)[1]+1, ] <- newrow.f
+        # Append values to scores.male
+        scores.male[dim(scores.male)[1]+1, ] <- newrow.m
+      }
+    }
+  }
+}
+```
+
 
 ```{r}
-
+barplot(scores.male$score - scores.female$score)
+for(g in 2:7){
+  barplot((scores.male$score - scores.female$score)[scores.female$grade == g])
+}
+        
 ```
 
 
+Next Actions
+------------
 
+* Continue to look at math score by grade and gender. Next break that down by zip code.
+* Build the data manually. For each unique zip code, create a data frame with Zip.Code, School.Code, Mean.Scale.Score(of CST Mathematics), Grade, Gender == Males, then the same thing with Gender == Females 
 
+This needs to contain all possibilities such that it will be possible to subtract the two to get a delta.  
 
+Once I have this I need to see how best to plot the results to look at the entire set: heat map? - one color set for males higher, one color set for females higher, higher intensity for higher delta.
+
+--------
+
+* There is a column that tallys how many from each subgroup were tested
+* How will I combine this with Census Data?
+* How are the sub subgroups created? Are the same numbers in each?
+* Variables to explore
+  * Total.STAR.Enrollment
+  * Test.Type
+  * Grade
+  * Students.with.Scores
+
+Notes / Lessons Learned
+-----------------------
+
+My biggest challenges so far have been wading through all the data and trying to merge all the different tables in a way I can make sense of.
 
 
 
