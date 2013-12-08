@@ -1,0 +1,96 @@
+Obsolete
+========================================================
+
+```{r eval=FALSE}
+d.code <- as.factor(scores$District.Code)
+plot(d.code)
+
+# What district is that big spike?
+levels(d.code)[match(max(table(d.code)), table(d.code))]
+               
+# District 68338 -- San Diego Unified (not surprising)
+# I live in Poway Unified, how many records there? Poway Unified == 68296
+sum(scores$District.Code == 68296)
+
+# 34113. How many combined?
+
+sum(scores$District.Code == 68296 | scores$District.Code == 68338)
+# 212488 seems like a good place to start.
+```
+
+
+Seem to have figured out my merge issues so this is no longer necessary.
+```{r eval=FALSE}
+# Filter scores to District Codes 68296 or 68338
+scores <- scores[scores$District.Code == 68296 | scores$District.Code == 68338,]
+```
+
+
+Other Clean up:
+```{r eval=FALSE}
+#All SD county so we can drop county code
+scores <- scores[,-scores$County.Code]
+
+```
+
+**Add School Names**
+```{r}
+
+schools <- unique(entities[,c("School.Code", "School.Name")])
+zip <- unique(entities[ ,c("School.Code", "School.Name", "Zip.Code")])
+zip <- zip[zip$School.Code != 1 & zip$School.Code != 0,]
+
+
+scores <- merge(x = scores, y = zip, by="School.Code", all.x=TRUE)
+
+
+```
+
+**Add District Names:**  
+
+There is something I don't quite understand where the charter schools have a district code for a more general district but the district name is unique:  
+District.Code -- District.Name  
+10371         -- San Diego County Office of Education  
+10371         -- Literacy First Charter  
+  
+There seem to be 45 unique district codes. If I filter out records with charter numbers, I get a list of 45 codes and 45 District Names. Let's use this for now.  
+
+```{r}
+districts <- unique(entities[entities$Charter.Number == 0, c("District.Code", "District.Name")])
+length(unique(districts$District.Code))
+length(unique(districts$District.Name))
+
+scores <- merge(x = scores, y = districts, by="District.Code", all.x=TRUE)
+
+```
+
+This may still not be what I'm looking for. It is further subdivided between tests.
+**this section is now broken**
+```{r eval=FALSE, fig.width=10, fig.height=12}
+# par(mar=c(5,4,4,2)) : default values
+par(mar=c(5,20,4,2))
+tbl <- aggregate(Percentage.Advanced ~ Subgroup.ID, data=scores, 
+                 mean, na.action=na.omit)
+
+tbl <- merge(x = tbl, y = subgroups, by="Subgroup.ID", all.x=TRUE)
+
+tbl <- tbl[with(tbl, order(All.Students.1, Percentage.Advanced)), ]
+
+get.color <- function(item) {which(levels(tbl$All.Students.1) == item)}
+color.id <- lapply(tbl$All.Students.1, get.color)
+
+barplot(tbl$Percentage.Advanced, names.arg=tbl$All.Students, horiz=TRUE, las=2, cex.names=0.65, 
+        col=as.numeric(color.id))
+
+```
+
+That was a prettty good way to look at the differences between the subgroups.
+
+Map stuff
+```{r eval=FALSE}
+# san.diego.map <- qmap('poway', zoom = 9, color = 'bw', legend = 'topleft')
+# san.diego.map <- ggmap(get_stamenmap(bbox=c(-117.5, 32.5, -116.5, 33.25), maptype="watercolor", color="bw"))
+
+bb <- attr(san.diego, "bb")  # "bb" stands for bounding box and contains the 
+                             # lower left (ll) and upper right (up) coordinates
+```
