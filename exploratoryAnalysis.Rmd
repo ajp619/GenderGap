@@ -209,7 +209,7 @@ barplot(tbl$V1)
 
 
 
-```{r}
+```{r eval=FALSE}
 # for each zip code
   # for each school code
     # for each grade (2-7)
@@ -299,7 +299,7 @@ if (all(agg.F$School.Code == agg.M$School.Code)){
 
 
 
-```{r}
+```{r eval=FALSE}
 barplot(scores.male$score - scores.female$score)
 for(g in 2:7){
   barplot((scores.male$score - scores.female$score)[scores.female$grade == g])
@@ -355,9 +355,9 @@ if(file.exists("agg.byschool")){
 } else {
   agg.byschool <- data.frame(agg.byschool, lon=rep(NA, nrow(agg.byschool)), lat=rep(NA, nrow(agg.byschool)))
     for(i in 1:nrow(agg.byschool)){
-    loc <- geocode(paste(agg.byschool$School.Name[i], agg.byschool$Zip.Code[i], sep=" "))
-    agg.byschool$lon[i] <- as.numeric(loc[1])
-    agg.byschool$lat[i] <- as.numeric(loc[2])
+      loc <- geocode(paste(agg.byschool$School.Name[i], agg.byschool$Zip.Code[i], sep=" "))
+      agg.byschool$lon[i] <- as.numeric(loc[1])
+      agg.byschool$lat[i] <- as.numeric(loc[2])
   }
   save(agg.byschool, file="agg.byschool")
 }
@@ -402,8 +402,21 @@ file.location <- paste("http://mcdc.missouri.edu/tmpscratch/",
                        "caps10acs", num, ".csv",
                        sep="")
 file.location
-data.tmp <- read.csv(file=file.location)
+data.tmp <- read.csv(file=file.location, colClasses = "character")
 ```
+
+This function expects a data frame of all character class and removes all "$" or "," from any value. This is in anticipation that all these characters are actually numbers and will be converted to numbers later.
+```{r}
+clean.df <- function(some.df){
+  for(r in 1:nrow(some.df)){
+    some.df[r,] <- gsub(pattern="[\\$|,]", replacement="", x=some.df[r,])
+  }
+  numeric.columns <- !names(some.df) %in% c("sitename", "period")
+  some.df[, numeric.columns] <- as.numeric(some.df[, numeric.columns])
+  return(some.df)
+}
+```
+
 
 This function retrieves demographic information from mcdc.missouri.edu based on lat, lon, and radius. If no information exists the radius will be increased (up to 10) until information is found. If still no information is available, NA is returned.
 ```{r}
@@ -428,12 +441,14 @@ get.demographics <- function(school.code, lat, lon, radius){
     file.location <- paste("http://mcdc.missouri.edu/tmpscratch/",
                            "caps10acs", num, ".csv",
                            sep="")
-    data.newline <- tryCatch(read.csv(file=file.location), 
+    data.newline <- tryCatch(read.csv(file=file.location, colClasses = "character"), 
                              error = function(err){return(NA)}, 
                              warning = function(war){return(NA)})
     radius <- radius + 1
   }
-  if(is.na(data.newline)){return(NA)}
+  if(all(is.na(data.newline))){return(NA)}
+  
+  data.newline <- clean.df(data.newline)
   return(cbind(School.Code=school.code, data.newline))
 }
 ```
@@ -471,10 +486,13 @@ for(row in 1:nrow(agg.byschool)){
   }
   
   # Check to see if we have new information
-  new.info <- !is.na(data.newline)
+  new.info <- !(all(is.na(data.newline)))
  
   if(new.info){
-    if(first.run){demographics.byschool <- data.newline}
+    if(first.run){
+      demographics.byschool <- data.newline
+      first.run <- FALSE
+    }
     else{demographics.byschool <- rbind(demographics.byschool, data.newline)}
   }
   
@@ -484,46 +502,57 @@ save(demographics.byschool, file="demographics.byschool")
 ```
 
 Now need to clean up this data. First let's break it into groups:
-1. Age
-1. Age and Sex
-1. Race
-1. Hispanic or Latino (Any Race)
-1. Household Income and Benefits (In 2011 Inflation-Adjusted Dollars)
-1. Family Income and Benefits (In 2011 Inflation-Adjusted Dollars)
-1. Other Income Measures (In 2011 Inflation-Adjusted Dollars)
-1. Poverty Status Over the Last 12 Months
-1. Employment Status
-1. Children With All Parents Working
-1. Commuting to Work
-1. Workers by Occupation
-1. Workers by Industry
-1. Class of Worker
-1. Households by Type
-1. Persons by Household Type / Group Quarters
-1. Relationship
-1. Marital Status
-1. Fertility
-1. Grandparents as Caregivers
-1. School Enrollment
-1. Educational Attainment
-1. Veteran Status
-1. Residene 1 Year Ago
-1. Place of Birth and Citizenship Status
-1. Year of Entry
-1. World Region of Birth of Foreign Born
-1. Language Spoken at Home
-1. Housing Occupancy and Tenure
-1. Units in Structure
-1. Year Structure Built
-1. Year Householder Moved into Unit
-1. Vehicles Available
-1. House Heating Fuel
-1. Selected Characteristics
-1. Occupants Per Room
-1. Home Values
-1. Selected Monthly Owner Costs
-1. Gross Rent
+1. Age  
+1. Age and Sex  
+1. Race  
+1. Hispanic or Latino (Any Race)  
+1. Household Income and Benefits (In 2011 Inflation-Adjusted Dollars) 
+1. Family Income and Benefits (In 2011 Inflation-Adjusted Dollars)  
+1. Other Income Measures (In 2011 Inflation-Adjusted Dollars)  
+1. Poverty Status Over the Last 12 Months  
+1. Employment Status  
+1. Children With All Parents Working  
+1. Commuting to Work  
+1. Workers by Occupation  
+1. Workers by Industry  
+1. Class of Worker  
+1. Households by Type  
+1. Persons by Household Type / Group Quarters  
+1. Relationship  
+1. Marital Status  
+1. Fertility  
+1. Grandparents as Caregivers  
+1. School Enrollment  
+1. Educational Attainment  
+1. Veteran Status  
+1. Residene 1 Year Ago  
+1. Place of Birth and Citizenship Status  
+1. Year of Entry  
+1. World Region of Birth of Foreign Born  
+1. Language Spoken at Home  
+1. Housing Occupancy and Tenure  
+1. Units in Structure  
+1. Year Structure Built  
+1. Year Householder Moved into Unit  
+1. Vehicles Available  
+1. House Heating Fuel  
+1. Selected Characteristics  
+1. Occupants Per Room  
+1. Home Values  
+1. Selected Monthly Owner Costs  
+1. Gross Rent  
 
+```{r}
+r <- 513
+for(i in 1:ncol(demographics.byschool)){
+  line <- c(as.character(i),
+                         names(demographics.byschool)[i],
+                         demographics.byschool[r,i],
+                         class(demographics.byschool[r,i]))
+  tmp <- sprintf(c("%3s", "%-20s", "%10s", "%10s"), line)
+  print(tmp)
+  }
+```
 
 
 
@@ -536,6 +565,66 @@ Now need to clean up this data. First let's break it into groups:
 ------------------------
 
 ## Merge Scores with Demographics
+
+Looking at the lat and lon of the schools in agg.byschool that are not in demographics.byschool it is clear that something is wrong with the geocodes of those schools, which should be in the range lat:(32.5, 33.5) and lon:(-117.5, -116)
+```{r}
+# Which schools are in agg.byschool but not demographics.byschool
+agg.byschool[which(!(agg.byschool$School.Code %in% demographics.byschool$School.Code)),]
+
+# Remove these schools from agg.byschool
+agg.byschool <- agg.byschool[which(agg.byschool$School.Code %in% demographics.byschool$School.Code), ]
+
+# Now merge agg.byschool with demographics.byschool into agg.byschool. Remove duplicate columns
+dup.names <- c("sitename", "Longitude", "Latitude")
+agg.byschool <- merge(x = agg.byschool, 
+                      y = demographics.byschool[,!(names(demographics.byschool) %in% dup.names)],
+                      all.x = TRUE)
+```
+
+```{r eval=FALSE}
+bias <- rep("Male", times=nrow(agg.byschool))
+bias[agg.byschool$delta < 0] <- "Female"
+bias <- as.factor(bias)
+agg.byschool <- cbind(agg.byschool, bias=bias)
+```
+
+
+The most interesting thing that comes out of this is that the first split is on pctProfessional
+```{r eval=FALSE}
+
+library(rpart)
+library(rattle)
+
+remove.names <- c("delta", "avg.M", "avg.F", "School.Name")
+filter <- !(names(agg.byschool) %in% remove.names)
+
+form = formula(bias ~ .)
+
+tree.m <- rpart(form,
+                 data=agg.byschool[,filter],
+                 method="class",
+                 parms=list(split="information"),
+                 control=rpart.control(usesurrogate=2,  # How to treat missing values
+                                       maxsurrogate=0,
+                                       minsplit=30,
+                                       maxdepth=20))
+drawTreeNodes(tree.m)
+eval(parse(text=genPlotTitleCmd("Characteristics Prediting Bias")))
+print(tree.m)
+```
+
+```{r}
+plot(agg.byschool$delta ~ agg.byschool$pctProfessional)
+abline(h=0, col="blue")
+abline(v=18.85, col="blue")
+
+plot(agg.byschool$delta ~ agg.byschool$AvgHHInc)
+abline(h=0, col="blue")
+abline(v=110000, col="blue")
+lm.income <- lm(agg.byschool$delta ~ agg.byschool$AvgHHInc)
+abline(lm.income, col="red")
+```
+
 
 ### Merge Data
 
@@ -578,3 +667,15 @@ san.diego.map + points + scale_size(range=c(1,10))
   
   
 ```
+
+```{r}
+
+points <-   geom_point(aes(x = lon, y = lat, size=pctProfessional, color = bias), 
+                       data = agg.byschool, 
+                       alpha = 0.8)
+
+san.diego.map + points + scale_size(range=c(1,10))
+  
+  
+```
+
