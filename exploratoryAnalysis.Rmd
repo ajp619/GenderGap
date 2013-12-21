@@ -37,7 +37,7 @@ library("RCurl")
 
 Read in the data:
 ```{r}
-file.location <- "../Data Sets/san diego research file/"
+file.location <- "san diego research file/"
 
 scores.file.name <- "ca2012_all_37_csv_v3.txt"
 entities.file.name <- "ca2012entities_csv.txt"
@@ -650,7 +650,7 @@ ggplot() +
 First create a base map:
 ```{r}
 san.diego <- get_map(location=c(-117, 32.9), zoom=10)
-san.diego.map <- ggmap(san.diego, darken=c(0.6, "white"))
+san.diego.map <- ggmap(san.diego, darken=c(0.8))  # , "white"
 ```
 
 Let's start simple. Plot schools on map colored by whether the male score was higher or the female score. Then size point based on magnitude of difference.
@@ -668,13 +668,29 @@ san.diego.map + points + scale_size(range=c(1,10))
   
 ```
 
+The below map represents each school on a map with a bubble sized according to the difference between male and female scores. Each point is then colored by which sex scored higher. Finally, income is indicated by scaling the transparency. If higher incomes are more likely to have higher male scores, this should bias the color towards the male color.
+
 ```{r}
+with(agg.byschool,
+     filter <- AvgHHInc < 200000 & AvgHHInc > 75000
+     )
 
-points <-   geom_point(aes(x = lon, y = lat, size=pctProfessional, color = bias), 
-                       data = agg.byschool, 
-                       alpha = 0.8)
+points.m <-  geom_point(aes(x = lon, y = lat, 
+                          size=abs(delta), 
+                          color = bias, 
+                          alpha = AvgHHInc), 
+                      data = agg.byschool[filter,])
 
-san.diego.map + points + scale_size(range=c(1,10))
+# Flip the income scale
+points.f <-  geom_point(aes(x = lon, y = lat, 
+                          size=abs(delta), 
+                          color = bias, 
+                          alpha = -AvgHHInc), 
+                      data = agg.byschool[filter,])
+
+s.range <- c(3,12)
+san.diego.map + points.m + scale_size(range=s.range) + scale_colour_brewer(palette = "Set1")
+san.diego.map + points.f + scale_size(range=s.range) + scale_colour_brewer(palette = "Set1") 
   
   
 ```
